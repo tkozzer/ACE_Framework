@@ -1,7 +1,8 @@
 # llm/gpt.py
+import time
 from typing import List, TypedDict, Optional
 
-import openai
+from openai import OpenAI
 
 from ace.logger import Logger
 
@@ -15,22 +16,51 @@ class GptMessage(TypedDict):
 class GPT:
     def __init__(self):
         self.log = Logger(self.__class__.__name__)
+        self.client = OpenAI(
+            max_retries=5,
+            timeout=5.0,
+        )
 
     def create_conversation_completion(
         self, model, conversation: List[GptMessage]
     ) -> GptMessage:
-        # print("_create_conversation_completion called for conversation: " + str(conversation))
-        # openai.api_key = self.api_key
-        chat_completion = openai.ChatCompletion.create(
-            model=model, messages=conversation
-        )
+        self.log.info(f"conversation: {conversation}")
+
+        count = 0
+        while True:
+            try:
+                self.log.info("Creating conversation completion")
+                start_time = time.time()
+                
+                chat_completion = self.client.chat.completions.create(
+                    model=model, 
+                    response_format={"type": "json_object"},
+                    messages=conversation,
+                    temperature=0.1,
+                )
+                break
+            except Exception as e:
+                end_time = time.time()
+                self.log.error("Conversation completion took " + str(end_time - start_time))
+                self.log.error("Error creating conversation completion: " + str(e))
+                count += 1
+                if count >= 5:
+                    raise e
+            
+        end_time = time.time()
+        self.log.info("Conversation completion took " + str(end_time - start_time))
+        self.log.info("Chat completion: " + str(chat_completion))
         response = chat_completion.choices[0].message
         return response
+        
 
-    def create_image(self, prompt, size="256x256") -> str:
+    def create_image(self, prompt, quality="standard",  size="256x256") -> str:
         self.log.debug("Generating image for prompt: " + prompt)
-        openai.api_key = self.api_key
-        result = openai.Image.create(prompt=prompt, n=1, size=size)
+        result = self.client.images.generate(
+            size=size,
+            prompt=prompt,
+            quality=quality
+        )
         image_url = result.data[0].url
         self.log.debug(
             ".... finished generating image for prompt" + prompt + ":\n" + image_url

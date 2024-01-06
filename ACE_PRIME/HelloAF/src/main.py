@@ -17,7 +17,7 @@ def load_resource(resource_class_name, import_path):
     try:
         module = importlib.import_module(import_path)
     except ImportError:
-        logger.debug(
+        logger.error(
             f"No import available for module {import_path}",
         )
         return
@@ -34,13 +34,14 @@ def load_resource(resource_class_name, import_path):
 def loader(resource_name):
     try:
         resource_class_name = util.snake_to_class(resource_name)
-        logger.debug(
+        logger.info(
             f"Converted resource_name to resource_class: {resource_class_name}"
         )
         subdirectory = os.environ.get("ACE_RESOURCE_SUBDIRECTORY") or "hello_layers"
         logger.debug(f"ACE_RESOURCE_SUBDIRECTORY: {subdirectory}")
         for directory in RESOURCE_LOADER_DIRECTORIES:
             import_path = f"ace.resources.{directory}.{subdirectory}.{resource_name}"
+            logger.debug(f"Trying to import from {import_path}")
             resource_class = load_resource(resource_class_name, import_path)
             if resource_class:
                 break
@@ -56,7 +57,7 @@ def loader(resource_name):
         logger.debug(f"Imported {resource_class_name} from {import_path}")
         resource = resource_class()
         logger.debug(f"Created an instance of {resource_class}")
-        logger.info(f"Calling start_resource method on the {resource_class} instance")
+        logger.debug(f"Calling start_resource method on the {resource_class} instance")
         resource.start_resource()
         logger.debug(f"Called start_resource method on the {resource_class} instance")
         return True

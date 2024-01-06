@@ -17,7 +17,7 @@ from ace.framework.util import parse_json
 
 class LayerSettings(Settings):
     mode: str = "OpenAI"
-    model: str = "gpt-3.5-turbo-1106"
+    model: str = "gpt-4-1106-preview"
     activation_mode: str = "events"
 
 
@@ -115,6 +115,9 @@ class Layer(Resource):
 
     def parse_req_resp_messages(self, messages=None):
         messages = messages or []
+        # TODO check to see if messages is in a list, if not, make it a list
+        if not isinstance(messages, list):
+            messages = [messages]
         data_messages, control_messages = [], []
         for m in messages:
             if m["type"] == "DATA_RESPONSE" or m["type"] == "CONTROL_RESPONSE":

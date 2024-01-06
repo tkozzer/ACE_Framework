@@ -1,10 +1,11 @@
 import asyncio
+import os
 
 from ace import constants
 from ace.framework.layer import Layer, LayerSettings
 from ace.framework.llm.gpt import GptMessage
 from ace.framework.util import parse_json
-from ace.resources.core.hello_layers.util import get_template_dir, get_identities_dir
+from ace.resources.core.hello_layers.util import get_identities_dir, get_template_dir, get_outputs_dir
 from jinja2 import Environment, FileSystemLoader
 
 
@@ -53,6 +54,13 @@ class Layer6(Layer):
         ace_context = env.get_template("ace_context.md").render()
 
         layer_instructions = env.get_template("layer_instructions.md")
+        system_message = env.get_template("system_prompt.md")
+        layer6_system_message = system_message.render(ace_context=ace_context, identity=identity)
+
+        outputs_dir = get_outputs_dir()
+        outputs_env = Environment(loader=FileSystemLoader(outputs_dir))
+        l6_north = outputs_env.get_template("l6_north.md").render()
+        l6_south = outputs_env.get_template("l6_south.md").render()
 
         layer6_instructions = layer_instructions.render(
             ace_context=ace_context,
@@ -64,16 +72,18 @@ class Layer6(Layer):
             data_req=prompt_messages["data_req"],
             control_req=prompt_messages["control_req"],
             telemetry=prompt_messages["telemetry"],
+            northbound_instructions=l6_north,
+            southbound_instructions=l6_south,
         )
 
         llm_messages: [GptMessage] = [
+            {"role": "system", "content": layer6_system_message},
             {"role": "user", "content": layer6_instructions},
         ]
 
         llm_response: GptMessage = self.llm.create_conversation_completion(
-            "gpt-3.5-turbo", llm_messages
-        )
-        llm_response_content = llm_response["content"].strip()
+            self.settings.model, llm_messages)
+        llm_response_content = llm_response.content.strip()
         layer_log_messsage = env.get_template("layer_log_message.md")
         log_message = layer_log_messsage.render(
             llm_req=layer6_instructions, llm_resp=llm_response_content
@@ -81,13 +91,20 @@ class Layer6(Layer):
         self.resource_log(log_message)
         llm_messages = parse_json(llm_response_content)
         # No sourthbound messages
-        messages_northbound, _ = self.parse_req_resp_messages(llm_messages)
+        messages_northbound, output = self.parse_req_resp_messages(llm_messages)
+        self.log.info(f"Output: {output}")
+        if isinstance(output, list):
+            message = output[0]
+            if isinstance(message, dict):
+                os.system(message["message"])
+
 
         return messages_northbound, []
 
     async def handle_event(self, event, data):
         await super().handle_event(event, data)
         if event == "execute":
+            await asyncio.sleep(constants.DEBUG_LAYER_SLEEP_TIME)
             self.agent_run_layer()
             await asyncio.sleep(constants.DEBUG_LAYER_SLEEP_TIME)
             # self.send_event_to_pathway("northbound", "execute")

@@ -4,7 +4,7 @@ from ace import constants
 from ace.framework.layer import Layer, LayerSettings
 from ace.framework.llm.gpt import GptMessage
 from ace.framework.util import parse_json
-from ace.resources.core.hello_layers.util import get_template_dir, get_identities_dir
+from ace.resources.core.hello_layers.util import get_identities_dir, get_template_dir, get_outputs_dir
 from jinja2 import Environment, FileSystemLoader
 
 
@@ -53,6 +53,13 @@ class Layer5(Layer):
         ace_context = env.get_template("ace_context.md").render()
 
         layer_instructions = env.get_template("layer_instructions.md")
+        system_message = env.get_template("system_prompt.md")
+        layer5_system_message = system_message.render(ace_context=ace_context, identity=identity)
+
+        outputs_dir = get_outputs_dir()
+        outputs_env = Environment(loader=FileSystemLoader(outputs_dir))
+        l5_north = outputs_env.get_template("l5_north.md").render()
+        l5_south = outputs_env.get_template("l5_south.md").render()
 
         layer5_instructions = layer_instructions.render(
             ace_context=ace_context,
@@ -64,16 +71,18 @@ class Layer5(Layer):
             data_req=prompt_messages["data_req"],
             control_req=prompt_messages["control_req"],
             telemetry=prompt_messages["telemetry"],
+            northbound_instructions=l5_north,
+            southbound_instructions=l5_south,
         )
 
         llm_messages: [GptMessage] = [
+            {"role": "system", "content": layer5_system_message},
             {"role": "user", "content": layer5_instructions},
         ]
 
         llm_response: GptMessage = self.llm.create_conversation_completion(
-            "gpt-3.5-turbo", llm_messages
-        )
-        llm_response_content = llm_response["content"].strip()
+            self.settings.model, llm_messages)
+        llm_response_content = llm_response.content.strip()
         layer_log_messsage = env.get_template("layer_log_message.md")
         log_message = layer_log_messsage.render(
             llm_req=layer5_instructions, llm_resp=llm_response_content
@@ -89,6 +98,7 @@ class Layer5(Layer):
     async def handle_event(self, event, data):
         await super().handle_event(event, data)
         if event == "execute":
+            await asyncio.sleep(constants.DEBUG_LAYER_SLEEP_TIME)
             self.agent_run_layer()
             await asyncio.sleep(constants.DEBUG_LAYER_SLEEP_TIME)
             self.send_event_to_pathway("southbound", "execute")

@@ -1,23 +1,26 @@
-{{ace_context}}
-{{identity}}
+# INSTRUCTIONS
 
 Below is a list of your incoming messages.
 
-# INCOMING MESSAGES
+## INCOMING MESSAGES
 
 ### DATA MESSAGES
+
 {{data}}
 
-## TELEMETRY MESSAGES
+### TELEMETRY MESSAGES
+
 {{telemetry}}
 
 ## RESPONSE FORMAT
 
-Your response should be an array of messages with type, direction and text attributes. 
+Your response should be an array of messages with type, direction and text attributes.
 The direction should always be "southbound". The type should always be "CONTROL". The
 direction should always be "southbound".
 If no messages are needed, return an empty array.
 For example:
+
+```JSON
 [
     {
         "type": "CONTROL",
@@ -25,3 +28,8 @@ For example:
         "message": "Create a strategy to accomplish the mission"
     },
 ]
+```
+
+### SOUTHBOUND MESSAGE INSTRUCTIONS
+
+{{southbound_instructions}}

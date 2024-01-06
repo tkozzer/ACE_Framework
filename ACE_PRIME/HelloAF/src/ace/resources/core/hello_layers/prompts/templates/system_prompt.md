@@ -1,24 +1,8 @@
-# INSTRUCTIONS
+# SYSTEM INSTRUCTIONS
 
-Below is a list of your incoming messages.
+{{ace_context}}
 
-## INCOMING MESSAGES
-
-### TELEMETRY MESSAGES
-
-{{telemetry}}
-
-## NORTH BUS
-
-### DATA MESSAGES
-
-{{data}}
-
-## SOUTH BUS
-
-### CONTROL MESSAGES
-
-{{control}}
+{{identity}}
 
 ## RESPONSE FORMAT
 
@@ -38,11 +22,3 @@ Your response should be an array of messages with type, direction and text attri
     }
 ]
 ```
-
-### NORTHBOUND MESSAGE INSTRUCTIONS
-
-{{northbound_instructions}}
-
-### SOUTHBOUND MESSAGE INSTRUCTIONS
-
-{{southbound_instructions}}
