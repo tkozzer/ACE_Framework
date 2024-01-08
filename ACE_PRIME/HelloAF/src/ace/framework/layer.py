@@ -1,18 +1,19 @@
-import time
-import copy
-import yaml
 import aio_pika
+import copy
+import json
+import time
+import yaml
 from abc import abstractmethod
 import asyncio
 from threading import Thread
-import os
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, Template
 
 from ace import constants
 from ace.settings import Settings
 from ace.framework.resource import Resource
-from ace.framework.llm.gpt import GPT
+from ace.framework.llm.gpt import GPT, GptMessage
 from ace.framework.util import parse_json
+from ace.resources.core.hello_layers.util import get_prompt_dir
 
 
 class LayerSettings(Settings):
@@ -33,6 +34,10 @@ class Layer(Resource):
     @property
     def llm_model(self):
         return self.settings.model
+    
+    @property
+    def abbreviation(self):
+        return f"l{self.name[-1]}"
 
     async def post_connect(self):
         self.set_adjacent_layers()
@@ -76,7 +81,6 @@ class Layer(Resource):
     def set_llm(self):
         self.llm = GPT()
 
-    @abstractmethod
     def process_layer_messages(
         self,
         control_messages,
@@ -85,7 +89,42 @@ class Layer(Resource):
         response_messages,
         telemetry_messages,
     ):
-        pass
+        self.log.info(f"{self.labeled_name} received command to process messages")
+
+        data_req_messages, control_req_messages = self.parse_req_resp_messages(
+            request_messages
+        )
+        data_resp_messages, control_resp_messages = self.parse_req_resp_messages(
+            response_messages
+        )
+        prompt_messages = {
+            "data": self.get_messages_for_prompt(data_messages),
+            "data_resp": self.get_messages_for_prompt(data_resp_messages),
+            "control": self.get_messages_for_prompt(control_messages),
+            "control_resp": self.get_messages_for_prompt(control_resp_messages),
+            "data_req": self.get_messages_for_prompt(data_req_messages),
+            "control_req": self.get_messages_for_prompt(control_req_messages),
+            "telemetry": self.get_messages_for_prompt(telemetry_messages),
+        }
+
+        llm_messages: [GptMessage] = [
+            {"role": "system", "content": self.get_system_prompt()},
+            {"role": "user", "content": self.get_user_prompt(prompt_messages)},
+        ]
+
+        llm_response: GptMessage = self.llm.create_conversation_completion(
+            self.llm_model, llm_messages)
+        llm_response_content = llm_response.content.strip()
+
+        self.resource_log(self.get_layer_log_template().render(
+            llm_req=llm_messages, llm_resp=llm_response_content))
+        
+        llm_messages = parse_json(llm_response_content)
+        messages_northbound, messages_southbound = self.parse_req_resp_messages(
+            llm_messages
+        )
+
+        return messages_northbound, messages_southbound
 
     def run_layer(self):
         self.layer_running = True
@@ -503,3 +542,68 @@ class Layer(Resource):
             self.log.debug(f"{self.labeled_name} unsubscribing from {queue_name}...")
             await queue.cancel(consumer_tag)
             self.log.info(f"{self.labeled_name} unsubscribed from {queue_name}")
+
+    def get_system_prompt(self) -> str:
+        abr = self.abbreviation
+        identity_file = get_prompt_dir("identities", f"{abr}_identity.json")
+        with open(identity_file, "r") as f:
+            identity_dict = json.load(f)
+
+        output_file = get_prompt_dir("outputs", f"{abr}_output.json")
+        with open(output_file, "r") as f:
+            output_dict = json.load(f)
+
+        response_schema = get_prompt_dir("schemas", "response_schema.json")
+        with open(response_schema, "r") as f:
+            response_schema_dict = json.load(f)
+
+        templates_dir = get_prompt_dir("templates")
+        templates_env = Environment(loader=FileSystemLoader(templates_dir))
+        ace_context = templates_env.get_template("ace_context.md").render()
+        layer_identity_template = templates_env.get_template("layer_identity_template.md")
+        response_template = templates_env.get_template("layer_response_template.md")
+
+        identity = layer_identity_template.render(
+            layer_header=identity_dict["layer_header"],
+            primary_sections=identity_dict["primary_sections"],
+            optional_sections=identity_dict["optional_sections"],
+            interaction_sections=identity_dict["interaction_sections"],
+        )
+
+        response = response_template.render(
+            layer=self.name,
+            response_schema=json.dumps(response_schema_dict, indent=4),
+            response_json=json.dumps(output_dict["response_json"], indent=4),
+        )
+        
+        layer_system_prompt_template = templates_env.get_template(
+            "layer_system_prompt_template.md"
+        )
+        
+        return layer_system_prompt_template.render(
+            ace_context=ace_context,
+            identity=identity,
+            response=response,
+        )
+
+    def get_layer_log_template(self) -> Template:
+        templates_dir = get_prompt_dir("templates")
+        templates_env = Environment(loader=FileSystemLoader(templates_dir))
+        return templates_env.get_template("layer_log_template.md")
+    
+    def get_user_prompt(self, prompt_messages: dict) -> str:
+        templates_dir = get_prompt_dir("templates")
+        templates_env = Environment(loader=FileSystemLoader(templates_dir))
+        layer_instructions_template = templates_env.get_template(
+            "layer_instructions_template.md"
+        )
+        return layer_instructions_template.render(
+            layer=self.name,
+            data=prompt_messages["data"],
+            data_resp=prompt_messages["data_resp"],
+            control=prompt_messages["control"],
+            control_resp=prompt_messages["control_resp"],
+            data_req=prompt_messages["data_req"],
+            control_req=prompt_messages["control_req"],
+            telemetry=prompt_messages["telemetry"],
+        )

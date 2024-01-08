@@ -45,6 +45,10 @@ class Resource(ABC):
     @property
     def labeled_name(self):
         return f"{self.settings.name} ({self.settings.label})"
+    
+    @property
+    def name(self):
+        return self.settings.name
 
     @property
     def api_callbacks(self):

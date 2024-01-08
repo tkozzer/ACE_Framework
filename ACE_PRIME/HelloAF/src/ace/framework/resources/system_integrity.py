@@ -1,5 +1,4 @@
 import aio_pika
-import asyncio
 import yaml
 
 from ace.settings import Settings
