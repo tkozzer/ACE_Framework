@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "array",
+  "description": "An example of a valid JSON response for the given layer.",
+  "items": {
+    "type": "object",
+    "properties": {
+      "type": {
+        "type": "string",
+        "enum": ["CONTROL", "DATA"],
+        "description": "The type of message, either CONTROL or DATA."
+      },
+      "direction": {
+        "type": "string",
+        "enum": ["southbound", "northbound"],
+        "description": "The direction of the message, either southbound or northbound."
+      },
+      "message": {
+        "type": "string",
+        "description": "The content of the message."
+      }
+    },
+    "required": ["type", "direction", "message"],
+    "additionalProperties": false,
+    "allOf": [
+      {
+        "if": {
+          "properties": { "type": { "const": "CONTROL" } }
+        },
+        "then": {
+          "properties": { "direction": { "const": "southbound" } }
+        }
+      },
+      {
+        "if": {
+          "properties": { "type": { "const": "DATA" } }
+        },
+        "then": {
+          "properties": { "direction": { "const": "northbound" } }
+        }
+      }
+    ]
+  },
+  "minItems": 2,
+  "maxItems": 2
+}

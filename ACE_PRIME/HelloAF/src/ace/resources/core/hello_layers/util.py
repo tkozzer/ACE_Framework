@@ -1,11 +1,16 @@
 import os
-
-
-def get_template_dir():
-    return os.path.join(os.path.dirname(__file__), "prompts/templates")
-
-def get_identities_dir():
-    return os.path.join(os.path.dirname(__file__), "prompts/identities")
+import json
 
 def get_prompt_dir(sub_dir=None, file=None):
-    return os.path.join(os.path.dirname(__file__), f"prompts/{sub_dir}/{file}")
+    PROMPTS = "prompts"
+    if sub_dir is None and file is None:
+        return os.path.join(os.path.dirname(__file__), PROMPTS)
+    elif sub_dir is None:
+        return os.path.join(os.path.dirname(__file__), f"{PROMPTS}/{file}")
+    elif file is None:
+        return os.path.join(os.path.dirname(__file__), f"{PROMPTS}/{sub_dir}")
+    else:
+        return os.path.join(os.path.dirname(__file__), f"{PROMPTS}/{sub_dir}/{file}")
+    
+def json_indent(data: dict) -> str:
+    return json.dumps(data, indent=4)

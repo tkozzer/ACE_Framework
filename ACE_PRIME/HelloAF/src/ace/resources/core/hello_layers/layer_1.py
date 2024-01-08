@@ -5,8 +5,6 @@ from ace import constants
 from ace.framework.layer import Layer, LayerSettings
 from ace.framework.llm.gpt import GptMessage
 from ace.framework.util import parse_json
-from ace.resources.core.hello_layers.util import get_template_dir, get_identities_dir
-from jinja2 import Environment, FileSystemLoader
 
 
 class Layer1(Layer):
@@ -35,31 +33,24 @@ class Layer1(Layer):
         self.log.info(f"{self.labeled_name} received command to begin work")
         self.work_begun = True
 
-        identity_dir = get_identities_dir()
-        identity_env = Environment(loader=FileSystemLoader(identity_dir))
-        identity = identity_env.get_template("l1_identity.md").render()
-
-        template_dir = get_template_dir()
-        env = Environment(loader=FileSystemLoader(template_dir))
-        l1_starting_instructions = env.get_template("l1_starting_instructions.md")
-        ace_context = env.get_template("ace_context.md").render()
-        layer1_instructions = l1_starting_instructions.render(
-            ace_context=ace_context, identity=identity
-        )
+        # TODO: this task will be replaced with user input
+        task = """
+        Output "Hello Layers!" in big letters.
+        Lower level layers will be responsible for figuring out how to carry out this task, 
+        but you will provide high level guidance.
+        """
 
         llm_messages: [GptMessage] = [
-            {"role": "user", "content": layer1_instructions},
+            {"role": "system", "content": self.create_system_prompt()},
+            {"role": "user", "content": task},
         ]
 
         llm_response: GptMessage = self.llm.create_conversation_completion(
             self.llm_model, llm_messages
         )
         llm_response_content = llm_response.content.strip()
-        layer_log_messsage = env.get_template("layer_log_message.md")
-        log_message = layer_log_messsage.render(
-            llm_req=layer1_instructions, llm_resp=llm_response_content
-        )
-        self.resource_log(log_message)
+
+        self.resource_log(self.create_layer_log_message(llm_messages, llm_response_content))
         llm_messages = parse_json(llm_response_content)
         # There will never be northbound messages
         _, messages_southbound = self.parse_req_resp_messages(llm_messages)
@@ -90,10 +81,7 @@ class Layer1(Layer):
         response_messages,
         telemetry_messages,
     ):
-        identity_dir = get_identities_dir()
-        identity_env = Environment(loader=FileSystemLoader(identity_dir))
-        identity = identity_env.get_template("l1_identity.md").render()
-
+        self.log.info(f"{self.labeled_name} processing messages")
         self.message_count += 1
         self.log.info(f"{self.labeled_name} message count: {self.message_count}")
         if self.message_count >= constants.LAYER_1_DECLARE_DONE_MESSAGE_COUNT:
@@ -101,10 +89,10 @@ class Layer1(Layer):
                 self.declare_done()
                 self.done = True
             return [], []
-        data_req_messages, control_req_messages = self.parse_req_resp_messages(
+        data_req_messages, _ = self.parse_req_resp_messages(
             request_messages
         )
-        data_resp_messages, control_resp_messages = self.parse_req_resp_messages(
+        data_resp_messages, _ = self.parse_req_resp_messages(
             response_messages
         )
         prompt_messages = {
@@ -114,34 +102,20 @@ class Layer1(Layer):
             "telemetry": self.get_messages_for_prompt(telemetry_messages),
         }
 
-        template_dir = get_template_dir()
-        env = Environment(loader=FileSystemLoader(template_dir))
-        ace_context = env.get_template("ace_context.md").render()
-
-        l1_layer_instructions = env.get_template("l1_layer_instructions.md")
-
-        layer1_instructions = l1_layer_instructions.render(
-            ace_context=ace_context,
-            identity=identity,
-            data=prompt_messages["data"],
-            data_resp=prompt_messages["data_resp"],
-            data_req=prompt_messages["data_req"],
-            telemetry=prompt_messages["telemetry"],
-        )
-
         llm_messages: [GptMessage] = [
-            {"role": "user", "content": layer1_instructions},
+            {"role": "system", "content": self.create_system_prompt()},
+            {"role": "user", "content": self.create_user_prompt(prompt_messages)},
         ]
 
         llm_response: GptMessage = self.llm.create_conversation_completion(
             self.llm_model, llm_messages
         )
         llm_response_content = llm_response.content.strip()
-        layer_log_messsage = env.get_template("layer_log_message.md")
-        log_message = layer_log_messsage.render(
-            llm_req=layer1_instructions, llm_resp=llm_response_content
-        )
-        self.resource_log(log_message)
+   
+        self.resource_log(self.create_layer_log_message().render(
+            llm_req=llm_messages,
+            llm_resp=llm_response_content
+        ))
         llm_messages = parse_json(llm_response_content)
         # There will never be northbound messages
         _, messages_southbound = self.parse_req_resp_messages(llm_messages)

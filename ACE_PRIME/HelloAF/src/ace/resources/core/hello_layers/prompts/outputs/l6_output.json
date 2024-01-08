@@ -1,0 +1,14 @@
+{
+  "response_json": [
+    {
+      "type": "CONTROL",
+      "direction": "southbound",
+      "message": "figlet -c 'Digital Privacy Awareness'"
+    },
+    {
+      "type": "DATA",
+      "direction": "northbound",
+      "message": "Command: 'figlet -c Digital Privacy Awareness' executed successfully"
+    }
+  ]
+}

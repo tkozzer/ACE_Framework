@@ -1,12 +1,10 @@
 import asyncio
+import os
 
 from ace import constants
 from ace.framework.layer import Layer, LayerSettings
 from ace.framework.llm.gpt import GptMessage
 from ace.framework.util import parse_json
-from ace.resources.core.hello_layers.util import get_template_dir, get_identities_dir
-from jinja2 import Environment, FileSystemLoader
-
 
 class Layer6(Layer):
     @property
@@ -29,9 +27,6 @@ class Layer6(Layer):
         response_messages,
         telemetry_messages,
     ):
-        identity_dir = get_identities_dir()
-        identity_env = Environment(loader=FileSystemLoader(identity_dir))
-        identity = identity_env.get_template("l6_identity.md").render()
 
         data_req_messages, control_req_messages = self.parse_req_resp_messages(
             request_messages
@@ -48,40 +43,26 @@ class Layer6(Layer):
             "control_req": self.get_messages_for_prompt(control_req_messages),
             "telemetry": self.get_messages_for_prompt(telemetry_messages),
         }
-        template_dir = get_template_dir()
-        env = Environment(loader=FileSystemLoader(template_dir))
-        ace_context = env.get_template("ace_context.md").render()
-
-        layer_instructions = env.get_template("layer_instructions.md")
-
-        layer6_instructions = layer_instructions.render(
-            ace_context=ace_context,
-            identity=identity,
-            data=prompt_messages["data"],
-            data_resp=prompt_messages["data_resp"],
-            control=prompt_messages["control"],
-            control_resp=prompt_messages["control_resp"],
-            data_req=prompt_messages["data_req"],
-            control_req=prompt_messages["control_req"],
-            telemetry=prompt_messages["telemetry"],
-        )
 
         llm_messages: [GptMessage] = [
-            {"role": "user", "content": layer6_instructions},
+            {"role": "system", "content": self.create_system_prompt()},
+            {"role": "user", "content": self.create_user_prompt(prompt_messages)},
         ]
 
         llm_response: GptMessage = self.llm.create_conversation_completion(
             self.llm_model, llm_messages
         )
         llm_response_content = llm_response.content.strip()
-        layer_log_messsage = env.get_template("layer_log_message.md")
-        log_message = layer_log_messsage.render(
-            llm_req=layer6_instructions, llm_resp=llm_response_content
-        )
-        self.resource_log(log_message)
+        
+        self.resource_log(self.create_layer_log_message(llm_messages, llm_response_content))
         llm_messages = parse_json(llm_response_content)
-        # No sourthbound messages
-        messages_northbound, _ = self.parse_req_resp_messages(llm_messages)
+        # No southbound messages
+        messages_northbound, output = self.parse_req_resp_messages(llm_messages)
+        self.log.info(f"Output: {output}")
+        if isinstance(output, list):
+            message = output[0]
+            if isinstance(message, dict):
+                os.system(message["message"])
 
         return messages_northbound, []
 

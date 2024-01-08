@@ -1,0 +1,9 @@
+{
+  "response_json": [
+    {
+      "type": "CONTROL",
+      "direction": "southbound",
+      "message": "Create an informative banner that emphasizes the importance of digital privacy. The banner should be displayed in large letters to educate users about respecting and protecting personal data privacy in all digital interactions."
+    }
+  ]
+}
