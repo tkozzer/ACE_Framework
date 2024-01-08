@@ -17,7 +17,7 @@ from ace.framework.util import parse_json
 
 class LayerSettings(Settings):
     mode: str = "OpenAI"
-    model: str = "gpt-3.5-turbo-1106"
+    model: str = "gpt-4"
     activation_mode: str = "events"
 
 
@@ -25,6 +25,14 @@ class Layer(Resource):
     def __init__(self):
         super().__init__()
         self.layer_running = False
+
+    @property
+    def settings(self):
+        return LayerSettings()
+
+    @property
+    def llm_model(self):
+        return self.settings.model
 
     async def post_connect(self):
         self.set_adjacent_layers()
